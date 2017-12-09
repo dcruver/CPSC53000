@@ -42,6 +42,16 @@ class DataSetImpl implements DataSet<Float> {
     return null;
   }
   
+  public String getRowName(String zAxisName, int rowNumber) {
+    Table table = zAxisMap.get(zAxisName);
+    
+    if (table != null) {
+      return table.getString(rowNumber, 0);
+    }
+    
+    return "";
+  }
+  
   Float getRowMin(String zAxisName, int row) {
     Table table = zAxisMap.get(zAxisName); 
     FloatList floatList = new FloatList(table.getFloatRow(row));

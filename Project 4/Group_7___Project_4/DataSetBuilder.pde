@@ -25,7 +25,7 @@ public class DataSetBuilder {
   }
   
   public DataSetBuilder rowMask(int firstRow) {
-    this.rowMask(firstRow, firstRow + 1);
+    this.rowMask(firstRow, 1);
     return this;
   }
   
@@ -46,6 +46,7 @@ public class DataSetBuilder {
     DataSetImpl dataSetImpl = new DataSetImpl(String.format(TITLE_PATTERN, year));
     
     for (String alias : filenameAliasMap.keySet()) {
+      println("table: " + filenameAliasMap.get(alias));
       Table table = loadTable(filenameAliasMap.get(alias), "header");
       removeMaskedColumns(table);
       removeMaskedRows(table);
@@ -66,14 +67,18 @@ public class DataSetBuilder {
   
   private void removeMaskedRows(Table table) {
     for (MaskPair maskPair : maskedRows) {
-      int endIndex = (maskPair.start + maskPair.size) - 1;
+      if (maskPair.start > table.getRowCount() - 1) {
+        continue;
+      }
       
+      int endIndex = (maskPair.start + maskPair.size) - 1;
+    
       if (maskPair.size == 0) {
         endIndex = table.getRowCount();
       }
       
       for (int i = endIndex; i >= maskPair.start; i--) {
-        table.removeRow(table.getRowCount() - 1);
+        table.removeRow(i - 1);
       }
     }
   }

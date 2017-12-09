@@ -1,70 +1,177 @@
 import java.text.DecimalFormat;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Stack;
 
-private static final int BACKGROUND_COLOR = #999966;
-
+//Screen and Plot Area Size Definitions
 private static final int SCREEN_WIDTH = 1000;
 private static final int SCREEN_HEIGHT = 600;
 private static final int PLOT_AREA_TOP_LEFT_X = 100;
-private static final int PLOT_AREA_TOP_LEFT_Y = 90;
+private static final int PLOT_AREA_TOP_LEFT_Y = 100;
 private static final int PLOT_AREA_WIDTH = 700;
 private static final int PLOT_AREA_HEIGHT = 400;
-private static final int AXES_COLOR = #000000;
-private static final int PLOT_COLOR = #ffffcc;
+
+private static final String[] IMAGE_FILE_NAMES = {"Project4Splash2.jpg", "Project4Splash1.jpg"};
+
+//Colors
 private static final int ADJUSTED_VALUE_COLOR = #00ccff;
-private static final int UNADJUSTED_VALUE_COLOR = #ff5050;
+private static final int AXES_COLOR = #000000;
+private static final int BACKGROUND_COLOR = #999966;
+private static final int PLOT_COLOR = #ffffcc;
 private static final int TEXT_COLOR = #000000;
-private static final int MAX_ROW = 5;
+private static final int UNADJUSTED_VALUE_COLOR = #ff5050;
+
+//Font names
+private static final String SUBTITLE_FONT_NAME = "NimbusSanL-BoldItal-14.vlw";
+private static final String TITLE_FONT_NAME = "NimbusSanL-Bold-18.vlw";
+private static final String LABEL_FONT_NAME = "NimbusSanL-ReguCond-12.vlw";
+
+private int[] fileYears = {2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2007, 2006};
+
+private PFont titleFont;
+
+private PFont subTitleFont;
+
+private PFont labelFont;
 
 private float dataMin;
 
 private float dataMax;
 
-DataSet currentDataSet = null;
+private DataSet currentDataSet = null;
 
-List<DataSet> dataSets = new ArrayList<DataSet>();
+private List<DataSet> dataSets = new ArrayList<DataSet>();
 
-int currentRow = 0;
+private int currentRow = 0;
+
+private List<Integrator> adjustedIntegrators = new ArrayList<Integrator>();
+
+private List<Integrator> unAdjustedIntegrators = new ArrayList<Integrator>();
+
+private List<Point> plotPoints = new ArrayList<Point>();
+
+private Stack<PImage> imageStack;
 
 void setup() {
   size(1000, 600, JAVA2D);
-  int[] fileYears = {2017, 2016, 2015};
   
-  for (int fileYear : fileYears) {
+  initializeImageStack();
+  loadData();
+  loadFonts();
+  calculateMaxMin();
+  this.adjustedIntegrators = initializeIntegrators("adjusted");
+  this.unAdjustedIntegrators = initializeIntegrators("unadjusted");
+}
+
+private void initializeImageStack() {
+  imageStack = new Stack();
+  
+  for (String imageName : IMAGE_FILE_NAMES) {
+    PImage image = loadImage(imageName);
+    image.resize(SCREEN_WIDTH, SCREEN_HEIGHT);
+    imageStack.push(image);
+  }
+}
+
+private List<Integrator> initializeIntegrators(String zAxisName) {
+  List<Integrator> integrators = new ArrayList<Integrator>();
+  String[] xAxisNames = currentDataSet.getXAxisNames(zAxisName);
+  
+  for (int i = 1; i < xAxisNames.length; i++) {
+    String xAxisName = xAxisNames[i];
+    int value = (int) currentDataSet.getValue(xAxisName, currentRow, zAxisName).floatValue();
+    Integrator integrator =  new Integrator(value);
+    integrators.add(integrator);
+    
+    int offset = (i - 1) * (PLOT_AREA_WIDTH / (xAxisNames.length - 2));
+    int newX = PLOT_AREA_TOP_LEFT_X + offset;
+    int newY = getYForValue(value);
+    plotPoints.add(new Point(newX, newY, value));
+  }
+  
+  return integrators;
+}
+
+private void setIntegratorTargets(String zAxisName, List<Integrator> integrators) {
+  calculateMaxMin();
+  String[] xAxisNames = currentDataSet.getXAxisNames(zAxisName);
+  
+  for (int i = 0; i < integrators.size(); i++) {
+    String xAxisName = xAxisNames[i+1];
+    Integrator integrator = integrators.get(i);
+    float value = currentDataSet.getValue(xAxisName, currentRow, zAxisName).floatValue();
+    int intValue = (int) value;
+    integrator.target(intValue);
+    
+    int offset = i * (PLOT_AREA_WIDTH / (integrators.size() - 1));
+    int newX = PLOT_AREA_TOP_LEFT_X + offset;
+    int newY = getYForValue(value);
+    plotPoints.add(new Point(newX, newY, value));
+  }
+}
+
+private void loadFonts() {
+  this.subTitleFont = loadFont(SUBTITLE_FONT_NAME);
+  this.titleFont = loadFont(TITLE_FONT_NAME);
+  this.labelFont = loadFont(LABEL_FONT_NAME);
+}
+
+private void loadData() {
+    for (int fileYear : fileYears) {
     DataSet dataSet = new DataSetBuilder()
       .year(fileYear)
       .file(fileYear + "Adjusted.csv", "adjusted")
       .file(fileYear + "Unadjusted.csv", "unadjusted")
       .columnMask("NAICS  Code")
       .columnMask("TOTAL")
-      .rowMask(7, 0)
+      .rowMask(6, 0)
       .get();
     
     dataSets.add(dataSet);
   }
   
   currentDataSet = dataSets.get(0);
+  calculateMaxMin();
 }
 
 void draw() {
   smooth();
   noStroke();
   background(BACKGROUND_COLOR);
-  calculateMaxMin();
+  
+  if (imageStack.size() > 0) {
+    image(imageStack.peek(), 0, 0);
+    return;
+  }
 
-  textAlign(CENTER);
-  fill(TEXT_COLOR);
-  text(currentDataSet.getDataSetTitle(), SCREEN_WIDTH / 2, 30);
+  updateIntegrators(adjustedIntegrators);
+  updateIntegrators(unAdjustedIntegrators);
+  drawTitles();  
   drawPlotArea();
   drawXAxisLabels();
   drawYAxisLabels();
   drawLegend();
   plotData();
+  handleHover();
+}
+
+private void updateIntegrators(List<Integrator> integrators) {
+  for (Integrator integrator : integrators) {
+    integrator.update();
+  }
+}
+
+private void drawTitles() {
+  textAlign(CENTER);
+  fill(TEXT_COLOR);
+  textFont(titleFont);
+  text(currentDataSet.getDataSetTitle(), (SCREEN_WIDTH - 120) / 2, 30);
+  textFont(subTitleFont);
+  text(currentDataSet.getRowName("adjusted", currentRow), (SCREEN_WIDTH - 120) / 2, 50);
 }
 
 private void calculateMaxMin() {
-  this.dataMin = ((int) currentDataSet.getRowMin("unadjusted", currentRow).floatValue() / 1000) * 1000 - 1000;
+  this.dataMin = ((int) currentDataSet.getRowMin("unadjusted", currentRow).floatValue() / 1000) * 1000 - 15000;
   this.dataMax = ((int) currentDataSet.getRowMax("unadjusted", currentRow).floatValue() / 1000) * 1000 + 1000;
 }
 
@@ -72,43 +179,46 @@ private void drawLegend() {
   rectMode(CORNER);
   fill(PLOT_COLOR);
   rect(830, 200, 150, 75);
+  noFill();
+  stroke(TEXT_COLOR);
+  rect(830, 200, 150, 75);
   fill(ADJUSTED_VALUE_COLOR);
-  rect(845, 230, 6, 6);
+  rect(850, 230, 6, 6);
   fill(UNADJUSTED_VALUE_COLOR);
-  rect(845, 252, 6, 6);
+  rect(850, 252, 6, 6);
   
   fill(TEXT_COLOR);
   textAlign(RIGHT);
   text("Legend", 880, 215);
-  text("Adjusted Values", 952, 239);
-  text("Unadjusted Values", 965, 260);
+  text("Adjusted Values", 948, 239);
+  text("Unadjusted Values", 960, 260);
 }
 
 private void plotData() {
-  plotDataForRow(currentRow, "adjusted", ADJUSTED_VALUE_COLOR);
-  plotDataForRow(currentRow, "unadjusted", UNADJUSTED_VALUE_COLOR);
+  plotIntegratorData(adjustedIntegrators, ADJUSTED_VALUE_COLOR);
+  plotIntegratorData(unAdjustedIntegrators, UNADJUSTED_VALUE_COLOR);
 }
 
-private void plotDataForRow(int row, String zAxisName, int fillColor) {
+private void plotIntegratorData(List<Integrator> integrators, int fillColor) {
   fill(fillColor);
   Integer x = null;
   Integer y = null;
-  String[] xAxisNames = currentDataSet.getXAxisNames(zAxisName);
+  int i = 0;
   
-  for (int i = 1; i < xAxisNames.length; i++) {
-    String xAxisName = xAxisNames[i];
-    int value = (int) currentDataSet.getValue(xAxisName, row, zAxisName).floatValue();
-    int offset = (i - 1) * (PLOT_AREA_WIDTH / (xAxisNames.length - 2));
+  for (Integrator integrator : integrators) {
+    int value = (int) integrator.value;
+    int offset = i * (PLOT_AREA_WIDTH / (integrators.size() - 1));
     int newX = PLOT_AREA_TOP_LEFT_X + offset;
     int newY = getYForValue(value);
     
-    if (x != null && y != null) {
+    if (i != 0) {
       line(x, y, newX, newY);
     }
     
     rect(newX - 3, newY - 3, 6, 6);
     x = newX;
     y = newY;
+    i++;
   }
 }
 
@@ -117,12 +227,16 @@ private void drawPlotArea() {
   noStroke();
   fill(PLOT_COLOR);
   rect(PLOT_AREA_TOP_LEFT_X, PLOT_AREA_TOP_LEFT_Y, PLOT_AREA_WIDTH, PLOT_AREA_HEIGHT);
+  noFill();
+  stroke(TEXT_COLOR);
+  rect(PLOT_AREA_TOP_LEFT_X - 1, PLOT_AREA_TOP_LEFT_Y - 1, PLOT_AREA_WIDTH + 2, PLOT_AREA_HEIGHT + 2);
 }
 
 private void drawYAxisLabels() {
+  textFont(labelFont);
   fill(AXES_COLOR);
   stroke(128);
-  text("Million $", PLOT_AREA_TOP_LEFT_X - 35, 60);
+  text("Million $", PLOT_AREA_TOP_LEFT_X - 30, PLOT_AREA_TOP_LEFT_Y - 10);
   
   int volumeIntervalMinor = (int) (dataMax - dataMin) / 10;
   
@@ -143,6 +257,7 @@ private void drawYAxisLabels() {
 }
 
 void drawXAxisLabels() {
+  textFont(labelFont);
   fill(AXES_COLOR);
   stroke(128);
   String[] columnNames = currentDataSet.getXAxisNames("adjusted");
@@ -178,9 +293,22 @@ void mouseWheel(MouseEvent event) {
   if (event.getCount() > 0 && currentIndex > 0) {
     currentDataSet = dataSets.get(currentIndex - 1);
   }
+  
+  calculateMaxMin();
+  plotPoints.clear();
+  setIntegratorTargets("adjusted", adjustedIntegrators);
+  setIntegratorTargets("unadjusted", unAdjustedIntegrators);
 }
 
-void keyPressed() { 
+void keyPressed() {
+  if (imageStack.size() > 0) {
+    if (key == ' ') {
+      imageStack.pop();
+    }
+    
+    return;
+  }
+  
   if (key == '[') {
     if (currentRow > 0) {
       currentRow--;
@@ -188,10 +316,29 @@ void keyPressed() {
   } 
   
   if (key == ']') {
-    if (currentRow < MAX_ROW) {
+    if (currentRow < currentDataSet.getRowCount("adjusted") - 1) {
       currentRow++;
     }
   }
   
   calculateMaxMin();
+  plotPoints.clear();
+  setIntegratorTargets("adjusted", adjustedIntegrators);
+  setIntegratorTargets("unadjusted", unAdjustedIntegrators);
+}
+
+private void handleHover() {
+  fill(TEXT_COLOR);
+  
+  for (Point point : plotPoints) {
+    if (containsMouse(point)) {
+      String valueStr = DecimalFormat.getCurrencyInstance().format(point.getValue());
+      text(valueStr, point.x, point.y);
+    }
+  }
+}
+
+private boolean containsMouse(Point point) {
+  return abs(mouseX - point.x) < 6 &&
+         abs(mouseY - point.y) < 6;
 }
