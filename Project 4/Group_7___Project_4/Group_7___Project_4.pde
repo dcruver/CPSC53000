@@ -1,6 +1,9 @@
 import java.text.DecimalFormat;
-import java.util.List;
+
 import java.util.ArrayList;
+import java.util.List;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Stack;
 
 //Screen and Plot Area Size Definitions
@@ -52,15 +55,25 @@ private List<Point> plotPoints = new ArrayList<Point>();
 
 private Stack<PImage> imageStack;
 
+private Queue<GridLineMode> gridModeQueue = new LinkedList<GridLineMode>();
+
 void setup() {
   size(1000, 600, JAVA2D);
   
   initializeImageStack();
+  initializeGridLineQueue();
   loadData();
   loadFonts();
   calculateMaxMin();
   this.adjustedIntegrators = initializeIntegrators("adjusted");
   this.unAdjustedIntegrators = initializeIntegrators("unadjusted");
+}
+
+private void initializeGridLineQueue() {
+  gridModeQueue.offer(GridLineMode.HORIZONTAL);
+  gridModeQueue.offer(GridLineMode.BOTH);
+  gridModeQueue.offer(GridLineMode.VERTICAL);
+  gridModeQueue.offer(GridLineMode.NONE);
 }
 
 private void initializeImageStack() {
@@ -252,7 +265,15 @@ private void drawYAxisLabels() {
     
     String valueStr = DecimalFormat.getInstance().format(floor(v));
     text(valueStr, PLOT_AREA_TOP_LEFT_X - 15, y);
-    line(PLOT_AREA_TOP_LEFT_X - 10, y, PLOT_AREA_TOP_LEFT_X + PLOT_AREA_WIDTH, y); // Draw major tick
+    
+    int horizontalGridLineEnd = PLOT_AREA_TOP_LEFT_X;
+    GridLineMode gridLineMode = gridModeQueue.peek();
+    
+    if (gridLineMode == GridLineMode.BOTH || gridLineMode == GridLineMode.HORIZONTAL) {
+      horizontalGridLineEnd += PLOT_AREA_WIDTH;
+    }
+    
+    line(PLOT_AREA_TOP_LEFT_X - 10, y, horizontalGridLineEnd, y);
   }
 }
 
@@ -267,6 +288,15 @@ void drawXAxisLabels() {
     int offset = (i - 1) * (PLOT_AREA_WIDTH / (columnNames.length - 2)) + 8;
     int labelX = PLOT_AREA_TOP_LEFT_X + offset;
     verticalText(columnNames[i], labelX, labelY);
+    
+    int verticalGridLineStart = PLOT_AREA_TOP_LEFT_Y;
+    GridLineMode gridLineMode = gridModeQueue.peek();
+    
+    if (gridLineMode == GridLineMode.NONE || gridLineMode == GridLineMode.HORIZONTAL) {
+      verticalGridLineStart += PLOT_AREA_HEIGHT;
+    }
+    
+    line(labelX - 8, labelY - 30, labelX - 8, verticalGridLineStart);
   }
 }
 
@@ -301,11 +331,15 @@ void mouseWheel(MouseEvent event) {
 }
 
 void keyPressed() {
-  if (imageStack.size() > 0) {
-    if (key == ' ') {
+  if (key == ' ') {
+    if (imageStack.size() == 0) {
+      gridModeQueue.offer(gridModeQueue.poll());
+    } else {
       imageStack.pop();
-    }
-    
+    } 
+  }
+  
+  if (imageStack.size() > 0) {
     return;
   }
   

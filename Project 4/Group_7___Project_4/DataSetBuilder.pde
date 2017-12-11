@@ -46,7 +46,6 @@ public class DataSetBuilder {
     DataSetImpl dataSetImpl = new DataSetImpl(String.format(TITLE_PATTERN, year));
     
     for (String alias : filenameAliasMap.keySet()) {
-      println("table: " + filenameAliasMap.get(alias));
       Table table = loadTable(filenameAliasMap.get(alias), "header");
       removeMaskedColumns(table);
       removeMaskedRows(table);
