@@ -1,4 +1,5 @@
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,8 @@ private static final int UNADJUSTED_VALUE_COLOR = #ff5050;
 private static final String SUBTITLE_FONT_NAME = "NimbusSanL-BoldItal-14.vlw";
 private static final String TITLE_FONT_NAME = "NimbusSanL-Bold-18.vlw";
 private static final String LABEL_FONT_NAME = "NimbusSanL-ReguCond-12.vlw";
+
+private static final NumberFormat currencyFormat = DecimalFormat.getCurrencyInstance();
 
 private int[] fileYears = {2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2007, 2006};
 
@@ -67,6 +70,7 @@ void setup() {
   calculateMaxMin();
   this.adjustedIntegrators = initializeIntegrators("adjusted");
   this.unAdjustedIntegrators = initializeIntegrators("unadjusted");
+  currencyFormat.setMaximumFractionDigits(0);
 }
 
 private void initializeGridLineQueue() {
@@ -366,8 +370,8 @@ private void handleHover() {
   
   for (Point point : plotPoints) {
     if (containsMouse(point)) {
-      String valueStr = DecimalFormat.getCurrencyInstance().format(point.getValue());
-      text(valueStr, point.x, point.y);
+      String valueStr = currencyFormat.format(point.getValue());
+      text(valueStr, point.x + 19, point.y - 7);
     }
   }
 }
